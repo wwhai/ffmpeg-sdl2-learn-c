@@ -1,0 +1,18 @@
+{
+    "files.associations": {
+        "sdl_main.h": "c",
+        "stdio.h": "c",
+        "sdl.h": "c",
+        "sdl_ttf.h": "c",
+        "stdlib.h": "c",
+        "sdl_syswm.h": "c",
+        "clog.h": "c",
+        "samplefmt.h": "c",
+        "avcodec.h": "c",
+        "avformat.h": "c",
+        "avutil.h": "c"
+    },
+    "cSpell.words": [
+        "HWND"
+    ]
+}
