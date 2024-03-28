@@ -32,7 +32,7 @@ LIBRARY_PATHS = -L./clog-0.0.1/lib \
 
 
 LINKER_FLAGS = -lSDL2main -lclog -lSDL2 -lSDL2_ttf -lSDL2_ttf -lSDL2_image \
-               -lavformat -lavcodec -lswresample -lswscale -lavutil -lm -lz
+               -lavformat -lavfilter -lavcodec -lswresample -lswscale -lavutil -lm -lz
 
 OBJ_NAME = player-learn
 
