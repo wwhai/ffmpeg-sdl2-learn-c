@@ -10,9 +10,15 @@
         "samplefmt.h": "c",
         "avcodec.h": "c",
         "avformat.h": "c",
-        "avutil.h": "c"
+        "avutil.h": "c",
+        "initializer_list": "c",
+        "type_traits": "c",
+        "xutility": "c",
+        "windows.h": "c"
     },
     "cSpell.words": [
-        "HWND"
+        "AVERROR",
+        "HWND",
+        "muxing"
     ]
 }
