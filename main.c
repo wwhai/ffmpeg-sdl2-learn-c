@@ -13,152 +13,47 @@
 #include <unistd.h>
 #endif
 #include "clog.h"
-
-int AddWaterMark(AVFrame *frame_in, AVFrame *frame_out, int w, int h, const char *str)
+//
+// 添加文本水印
+void add_text_watermark(AVFrame *frame, const char *text)
 {
-    AVFilterGraph *filter_graph;
-    AVFilterContext *buffersrc_ctx = NULL, *buffersink_ctx = NULL;
-    const AVFilter *buffersrc, *buffersink;
-    int ret;
+    // 水印的位置和属性
+    int x = 10;                              // 水印的 x 坐标
+    int y = frame->height - 30;              // 水印的 y 坐标
+    int font_size = 20;                      // 字体大小
+    int font_thickness = 2;                  // 字体厚度
+    uint8_t font_color[3] = {255, 255, 255}; // 字体颜色（白色）
 
-    // Initialize filter graph
-    filter_graph = avfilter_graph_alloc();
-    if (!filter_graph)
+    // 计算水印的宽度和高度
+    int text_width = strlen(text) * font_size / 2;
+    int text_height = font_size + font_thickness;
+
+    // 确保水印在图像范围内
+    if (x + text_width > frame->width || y - text_height < 0)
     {
-        log_error("Failed to allocate filter graph");
-        return AVERROR(ENOMEM);
+        fprintf(stderr, "Watermark position is out of image bounds\n");
+        return;
     }
 
-    // Get buffersrc and buffersink filters
-    buffersrc = avfilter_get_by_name("buffer");
-    buffersink = avfilter_get_by_name("buffersink");
-    if (!buffersrc || !buffersink)
+    // 在图像上绘制水印
+    for (int i = 0; i < strlen(text); i++)
     {
-        log_error("Failed to get buffer source/sink filter");
-        avfilter_graph_free(&filter_graph);
-        return AVERROR_UNKNOWN;
+        for (int fy = 0; fy < font_size; fy++)
+        {
+            for (int fx = 0; fx < font_size / 2; fx++)
+            {
+                int pixel_x = x + i * font_size / 2 + fx;
+                int pixel_y = y - fy;
+                if (pixel_x >= 0 && pixel_x < frame->width && pixel_y >= 0 && pixel_y < frame->height)
+                {
+                    int pixel_pos = (pixel_y * frame->linesize[0]) + (pixel_x * 3);
+                    memcpy(frame->data[0] + pixel_pos, font_color, 3);
+                }
+            }
+        }
     }
-
-    // Create input filter chain
-    ret = avfilter_graph_create_filter(&buffersrc_ctx, buffersrc, "in", NULL, NULL, filter_graph);
-    if (ret < 0)
-    {
-        log_error("Failed to create buffer source filter");
-        avfilter_graph_free(&filter_graph);
-        return ret;
-    }
-
-    // Create output filter chain
-    ret = avfilter_graph_create_filter(&buffersink_ctx, buffersink, "out", NULL, NULL, filter_graph);
-    if (ret < 0)
-    {
-        log_error("Failed to create buffer sink filter");
-        avfilter_graph_free(&filter_graph);
-        return ret;
-    }
-
-    // Initialize drawtext filter parameters
-    char args[256];
-    snprintf(args, sizeof(args),
-             "text='%s':x=(w-text_w)/2:y=h-100:fontsize=24:fontcolor=white",
-             str);
-
-    // Create drawtext filter
-    AVFilterContext *drawtext_ctx = NULL;
-    const AVFilter *drawtext = avfilter_get_by_name("drawtext");
-    if (!drawtext)
-    {
-        log_error("Failed to get drawtext filter");
-        avfilter_graph_free(&filter_graph);
-        return AVERROR_UNKNOWN;
-    }
-
-    // Create drawtext filter chain
-    ret = avfilter_graph_create_filter(&drawtext_ctx, drawtext, "drawtext", args, NULL, filter_graph);
-    if (ret < 0)
-    {
-        log_error("Failed to create drawtext filter");
-        avfilter_graph_free(&filter_graph);
-        return ret;
-    }
-
-    // Link filters
-    ret = avfilter_link(buffersrc_ctx, 0, drawtext_ctx, 0);
-    if (ret < 0)
-    {
-        log_error("Failed to link buffersrc and drawtext filters");
-        avfilter_graph_free(&filter_graph);
-        return ret;
-    }
-
-    ret = avfilter_link(drawtext_ctx, 0, buffersink_ctx, 0);
-    if (ret < 0)
-    {
-        log_error("Failed to link drawtext and buffersink filters");
-        avfilter_graph_free(&filter_graph);
-        return ret;
-    }
-
-    // Configure the graph
-    ret = avfilter_graph_config(filter_graph, NULL);
-    if (ret < 0)
-    {
-        log_error("Failed to configure filter graph");
-        avfilter_graph_free(&filter_graph);
-        return ret;
-    }
-
-    // Send frame to the filter graph
-    ret = av_buffersrc_add_frame_flags(buffersrc_ctx, frame_in, AV_BUFFERSRC_FLAG_KEEP_REF);
-    if (ret < 0)
-    {
-        log_error("Failed to send frame to filter graph");
-        avfilter_graph_free(&filter_graph);
-        return ret;
-    }
-
-    // Receive filtered frame from the filter graph
-    AVFrame *filtered_frame = av_frame_alloc();
-    if (!filtered_frame)
-    {
-        log_error("Failed to allocate filtered frame");
-        avfilter_graph_free(&filter_graph);
-        return AVERROR(ENOMEM);
-    }
-
-    ret = av_buffersink_get_frame(buffersink_ctx, filtered_frame);
-    if (ret < 0)
-    {
-        log_error("Failed to get filtered frame from filter graph");
-        av_frame_free(&filtered_frame);
-        avfilter_graph_free(&filter_graph);
-        return ret;
-    }
-
-    // Convert filtered frame to the output frame format
-    struct SwsContext *sws_ctx = sws_getContext(filtered_frame->width, filtered_frame->height, filtered_frame->format,
-                                                w, h, AV_PIX_FMT_YUV420P,
-                                                SWS_BILINEAR, NULL, NULL, NULL);
-    if (!sws_ctx)
-    {
-        log_error("Failed to initialize scaling context");
-        av_frame_free(&filtered_frame);
-        avfilter_graph_free(&filter_graph);
-        return AVERROR_UNKNOWN;
-    }
-
-    sws_scale(sws_ctx, (const uint8_t *const *)filtered_frame->data, filtered_frame->linesize,
-              0, filtered_frame->height, frame_out->data, frame_out->linesize);
-    frame_out->width = w;
-    frame_out->height = h;
-
-    // Free resources
-    sws_freeContext(sws_ctx);
-    av_frame_free(&filtered_frame);
-    avfilter_graph_free(&filter_graph);
-
-    return 0;
 }
+//
 const char *input_url = "rtsp://192.168.1.210:554/av0_0";
 const char *output_url = "rtmp://127.0.0.1:1935/live/testv001";
 int main()
@@ -261,10 +156,12 @@ int main()
         return ret;
     }
 
-    AVPacket OriginPacket;
+    AVPacket *OriginPacket = av_packet_alloc();
+    AVFrame *InFrame = av_frame_alloc();
+    AVPacket *WatermarkPkt = av_packet_alloc();
     while (1)
     {
-        ret = av_read_frame(input_ctx, &OriginPacket);
+        ret = av_read_frame(input_ctx, OriginPacket);
         if (ret < 0)
         {
             if (ret == AVERROR_EOF)
@@ -272,22 +169,70 @@ int main()
             log_error("Error reading packet: %s", av_err2str(ret));
             break;
         }
-        AVStream *in_stream = input_ctx->streams[OriginPacket.stream_index];
-        AVStream *out_stream = output_ctx->streams[OriginPacket.stream_index];
+        // log_debug("av_read_frame %d\n", codec_ctx->frame_num);
 
-        OriginPacket.pts = av_rescale_q(OriginPacket.pts, in_stream->time_base, out_stream->time_base);
-        OriginPacket.duration = av_rescale_q(OriginPacket.duration, in_stream->time_base, out_stream->time_base);
-        OriginPacket.dts = OriginPacket.pts;
+        //------------------------------------------------------------------------------------------
+        // 从协议里面解帧
+        //------------------------------------------------------------------------------------------
+        if (OriginPacket->stream_index == 0)
+        {
+            if (avcodec_send_packet(codec_ctx, OriginPacket) < 0)
+            {
+                log_error("avcodec_send_packet: %s", av_err2str(ret));
+                continue;
+            }
+            if (avcodec_receive_frame(codec_ctx, InFrame) < 0)
+            {
+                log_debug("avcodec_receive_frame: %s", av_err2str(ret));
+                continue;
+            }
+            // add_text_watermark(InFrame, "HELLOWORLD");
+            if (avcodec_send_frame(codec_ctx, InFrame) < 0)
+            {
+                log_debug("avcodec_send_frame: %s", av_err2str(ret));
+                continue;
+            }
+            if (avcodec_receive_packet(codec_ctx, WatermarkPkt) < 0)
+            {
+                log_debug("avcodec_receive_packet: %s", av_err2str(ret));
+                continue;
+            }
+        }
+        AVStream *in_stream = input_ctx->streams[OriginPacket->stream_index];
+        AVStream *out_stream = output_ctx->streams[OriginPacket->stream_index];
 
-        ret = av_interleaved_write_frame(output_ctx, &OriginPacket);
-        // printf("av_interleaved_write_frame: %d", OriginPacket.dts);
+        WatermarkPkt->pts = av_rescale_q(OriginPacket->pts, in_stream->time_base, out_stream->time_base);
+        WatermarkPkt->duration = av_rescale_q(OriginPacket->duration, in_stream->time_base, out_stream->time_base);
+        WatermarkPkt->dts = OriginPacket->pts;
+
+        ret = av_interleaved_write_frame(output_ctx, WatermarkPkt);
+        log_debug("av_interleaved_write_frame: %d", WatermarkPkt->dts);
         if (ret < 0)
         {
-            log_error("Error writing packet: %s", av_err2str(ret));
+            log_error("Error writing packet: %d", (ret));
             break;
         }
+        //------------------------------------------------------------------------------------------
+        // 转发
+        //------------------------------------------------------------------------------------------
+        // AVStream *in_stream = input_ctx->streams[OriginPacket->stream_index];
+        // AVStream *out_stream = output_ctx->streams[OriginPacket->stream_index];
+
+        // OriginPacket->pts = av_rescale_q(OriginPacket->pts, in_stream->time_base, out_stream->time_base);
+        // OriginPacket->duration = av_rescale_q(OriginPacket->duration, in_stream->time_base, out_stream->time_base);
+        // OriginPacket->dts = OriginPacket->pts;
+
+        // ret = av_interleaved_write_frame(output_ctx, OriginPacket);
+        // // printf("av_interleaved_write_frame: %d", OriginPacket.dts);
+        // if (ret < 0)
+        // {
+        //     log_error("Error writing packet: %s", av_err2str(ret));
+        //     break;
+        // }
     }
-    av_packet_unref(&OriginPacket);
+    av_packet_free(&OriginPacket);
+    av_packet_free(&WatermarkPkt);
+    av_frame_free(&InFrame);
     ret = av_write_trailer(output_ctx);
     if (ret < 0)
     {
@@ -298,11 +243,11 @@ int main()
     }
 
     // Cleanup
-    avformat_close_input(&input_ctx);
     if (output_ctx && !(output_ctx->oformat->flags & AVFMT_NOFILE))
     {
         avio_closep(&output_ctx->pb);
     }
+    avformat_close_input(&input_ctx);
     avformat_free_context(output_ctx);
     avformat_network_deinit();
     return 0;
