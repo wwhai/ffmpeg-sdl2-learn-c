@@ -174,61 +174,61 @@ int main()
         //------------------------------------------------------------------------------------------
         // 从协议里面解帧
         //------------------------------------------------------------------------------------------
-        if (OriginPacket->stream_index == 0)
-        {
-            if (avcodec_send_packet(codec_ctx, OriginPacket) < 0)
-            {
-                log_error("avcodec_send_packet: %s", av_err2str(ret));
-                continue;
-            }
-            if (avcodec_receive_frame(codec_ctx, InFrame) < 0)
-            {
-                log_debug("avcodec_receive_frame: %s", av_err2str(ret));
-                continue;
-            }
-            // add_text_watermark(InFrame, "HELLOWORLD");
-            if (avcodec_send_frame(codec_ctx, InFrame) < 0)
-            {
-                log_debug("avcodec_send_frame: %s", av_err2str(ret));
-                continue;
-            }
-            if (avcodec_receive_packet(codec_ctx, WatermarkPkt) < 0)
-            {
-                log_debug("avcodec_receive_packet: %s", av_err2str(ret));
-                continue;
-            }
-        }
-        AVStream *in_stream = input_ctx->streams[OriginPacket->stream_index];
-        AVStream *out_stream = output_ctx->streams[OriginPacket->stream_index];
-
-        WatermarkPkt->pts = av_rescale_q(OriginPacket->pts, in_stream->time_base, out_stream->time_base);
-        WatermarkPkt->duration = av_rescale_q(OriginPacket->duration, in_stream->time_base, out_stream->time_base);
-        WatermarkPkt->dts = OriginPacket->pts;
-
-        ret = av_interleaved_write_frame(output_ctx, WatermarkPkt);
-        log_debug("av_interleaved_write_frame: %d", WatermarkPkt->dts);
-        if (ret < 0)
-        {
-            log_error("Error writing packet: %d", (ret));
-            break;
-        }
-        //------------------------------------------------------------------------------------------
-        // 转发
-        //------------------------------------------------------------------------------------------
+        // if (OriginPacket->stream_index == 0)
+        // {
+        //     if (avcodec_send_packet(codec_ctx, OriginPacket) < 0)
+        //     {
+        //         log_error("avcodec_send_packet: %s", av_err2str(ret));
+        //         continue;
+        //     }
+        //     if (avcodec_receive_frame(codec_ctx, InFrame) < 0)
+        //     {
+        //         log_debug("avcodec_receive_frame: %s", av_err2str(ret));
+        //         continue;
+        //     }
+        //     // add_text_watermark(InFrame, "HELLOWORLD");
+        //     if (avcodec_send_frame(codec_ctx, InFrame) < 0)
+        //     {
+        //         log_debug("avcodec_send_frame: %s", av_err2str(ret));
+        //         continue;
+        //     }
+        //     if (avcodec_receive_packet(codec_ctx, WatermarkPkt) < 0)
+        //     {
+        //         log_debug("avcodec_receive_packet: %s", av_err2str(ret));
+        //         continue;
+        //     }
+        // }
         // AVStream *in_stream = input_ctx->streams[OriginPacket->stream_index];
         // AVStream *out_stream = output_ctx->streams[OriginPacket->stream_index];
 
-        // OriginPacket->pts = av_rescale_q(OriginPacket->pts, in_stream->time_base, out_stream->time_base);
-        // OriginPacket->duration = av_rescale_q(OriginPacket->duration, in_stream->time_base, out_stream->time_base);
-        // OriginPacket->dts = OriginPacket->pts;
+        // WatermarkPkt->pts = av_rescale_q(OriginPacket->pts, in_stream->time_base, out_stream->time_base);
+        // WatermarkPkt->duration = av_rescale_q(OriginPacket->duration, in_stream->time_base, out_stream->time_base);
+        // WatermarkPkt->dts = OriginPacket->pts;
 
-        // ret = av_interleaved_write_frame(output_ctx, OriginPacket);
-        // // printf("av_interleaved_write_frame: %d", OriginPacket.dts);
+        // ret = av_interleaved_write_frame(output_ctx, WatermarkPkt);
+        // log_debug("av_interleaved_write_frame: %d", WatermarkPkt->dts);
         // if (ret < 0)
         // {
-        //     log_error("Error writing packet: %s", av_err2str(ret));
+        //     log_error("Error writing packet: %d", (ret));
         //     break;
         // }
+        //------------------------------------------------------------------------------------------
+        // 转发
+        //------------------------------------------------------------------------------------------
+        AVStream *in_stream = input_ctx->streams[OriginPacket->stream_index];
+        AVStream *out_stream = output_ctx->streams[OriginPacket->stream_index];
+
+        OriginPacket->pts = av_rescale_q(OriginPacket->pts, in_stream->time_base, out_stream->time_base);
+        OriginPacket->duration = av_rescale_q(OriginPacket->duration, in_stream->time_base, out_stream->time_base);
+        OriginPacket->dts = OriginPacket->pts;
+
+        ret = av_interleaved_write_frame(output_ctx, OriginPacket);
+        // printf("av_interleaved_write_frame: %d", OriginPacket.dts);
+        if (ret < 0)
+        {
+            log_error("Error writing packet: %s", av_err2str(ret));
+            break;
+        }
     }
     av_packet_free(&OriginPacket);
     av_packet_free(&WatermarkPkt);
