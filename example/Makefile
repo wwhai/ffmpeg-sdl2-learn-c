@@ -13,9 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # OBJS specifies which files to compile as part of the project
-NAME= libav-demo
-
-OBJS = ${NAME}.c
+OBJS = sdl2-demo.c
 
 CC = gcc
 
@@ -36,7 +34,7 @@ LIBRARY_PATHS = -L./clog-0.0.1/lib \
 LINKER_FLAGS = -lSDL2main -lclog -lSDL2 -lSDL2_ttf -lSDL2_ttf -lSDL2_image \
                -lavformat -lavfilter -lavcodec -lswresample -lswscale -lavutil -lm -lz
 
-OBJ_NAME = ${NAME}
+OBJ_NAME = sdl-demo1
 
 
 all : $(OBJS)
