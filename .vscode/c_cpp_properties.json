@@ -6,9 +6,9 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/clog-0.0.1/include",
                 "${workspaceFolder}/ffmpeg-6.1.1-full_build-shared/include",
-                "${workspaceFolder}/SDL2-2.30.1/x86_64-w64-mingw32/include/SDL2",
-                "${workspaceFolder}/SDL2_ttf-2.22.0/x86_64-w64-mingw32/include/SDL2",
-                "${workspaceFolder}/SDL2_image-2.8.2/x86_64-w64-mingw32/include/SDL2"
+                "${workspaceFolder}/SDL2-2.30.1/x86_64-w64-mingw32/include",
+                "${workspaceFolder}/SDL2_ttf-2.22.0/x86_64-w64-mingw32/include",
+                "${workspaceFolder}/SDL2_image-2.8.2/x86_64-w64-mingw32/include"
             ],
             "defines": [
                 "_DEBUG",

@@ -18,7 +18,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     {
     case WM_CLOSE:
         MessageBox(hwnd, "WINDOWS API CLOSE", "INFO", MB_OK);
-        return 0;
+        return 1;
     }
 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);

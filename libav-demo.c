@@ -1,306 +1,299 @@
-#define SDL_MAIN_HANDLED
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <time.h>
-#include <windows.h>
-#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libavutil/frame.h>
-#include <SDL.h>
+#include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
+#include <libavutil/imgutils.h>
+// #include <libavutil/opt.h>
+// #include <libavfilter/avfilter.h>
+// #include <libavfilter/buffersink.h>
+// #include <libavfilter/buffersrc.h>
+void save_frame_as_bmp(AVFrame *frame, const char *filename)
+{
+    FILE *f;
+    int width = 640;
+    int height = 640;
+    int row_size = (width * 3 + 3) & ~3; // Row size in bytes, aligned to 4 bytes
+    int data_size = row_size * height;
+    int file_size = 54 + data_size; // 54 bytes for BMP header and DIB header
 
-/*
-ffmpeg path: d:/dev/libffmpeg
-sdl2 path: d:/dev/sdl2
-to compile it:
-gcc -Id:/dev/libffmpeg/include -Id:/dev/sdl2/include \
-    -Ld:/dev/libffmpeg/lib -Ld:/dev/sdl2/lib \
-    fplay.c -lavcodec -lavutil -lavformat -lmingw32 -lSDL2main -lSDL2
-*/
+    uint8_t bmp_header[54] = {
+        'B', 'M',           // Signature
+        0, 0, 0, 0,         // Image file size
+        0, 0,               // Reserved1
+        0, 0,               // Reserved2
+        54, 0, 0, 0,        // Offset to start of image data
+        40, 0, 0, 0,        // Header size
+        width, 0, 0, 0,     // Image width
+        height, 0, 0, 0,    // Image height
+        1, 0,               // Number of color planes
+        24, 0,              // Bits per pixel
+        0, 0, 0, 0,         // Compression
+        data_size, 0, 0, 0, // Image data size
+        0x13, 0x0B, 0, 0,   // Horizontal resolution (2835 pixels/meter)
+        0x13, 0x0B, 0, 0,   // Vertical resolution (2835 pixels/meter)
+        0, 0, 0, 0,         // Number of colors
+        0, 0, 0, 0          // Important colors
+    };
 
-void display(AVCodecContext *, AVPacket *, AVFrame *, SDL_Rect *,
-             SDL_Texture *, SDL_Renderer *, double);
+    // Set file size and image offset
+    bmp_header[2] = (file_size & 0xFF);
+    bmp_header[3] = ((file_size >> 8) & 0xFF);
+    bmp_header[4] = ((file_size >> 16) & 0xFF);
+    bmp_header[5] = ((file_size >> 24) & 0xFF);
 
-void playaudio(AVCodecContext *ctx, AVPacket *pkt, AVFrame *frame,
-               SDL_AudioDeviceID auddev);
+    bmp_header[10] = (54 & 0xFF);
+    bmp_header[11] = ((54 >> 8) & 0xFF);
+    bmp_header[12] = ((54 >> 16) & 0xFF);
+    bmp_header[13] = ((54 >> 24) & 0xFF);
+
+    bmp_header[18] = (width & 0xFF);
+    bmp_header[19] = ((width >> 8) & 0xFF);
+    bmp_header[20] = ((width >> 16) & 0xFF);
+    bmp_header[21] = ((width >> 24) & 0xFF);
+
+    bmp_header[22] = (height & 0xFF);
+    bmp_header[23] = ((height >> 8) & 0xFF);
+    bmp_header[24] = ((height >> 16) & 0xFF);
+    bmp_header[25] = ((height >> 24) & 0xFF);
+
+    bmp_header[34] = (data_size & 0xFF);
+    bmp_header[35] = ((data_size >> 8) & 0xFF);
+    bmp_header[36] = ((data_size >> 16) & 0xFF);
+    bmp_header[37] = ((data_size >> 24) & 0xFF);
+
+    f = fopen(filename, "wb");
+    if (!f)
+    {
+        fprintf(stderr, "Error opening file %s\n", filename);
+        return;
+    }
+
+    fwrite(bmp_header, 1, 54, f);
+
+    uint8_t *row = (uint8_t *)malloc(row_size);
+    if (!row)
+    {
+        fprintf(stderr, "Memory allocation error\n");
+        fclose(f);
+        return;
+    }
+
+    for (int i = height - 1; i >= 0; i--)
+    {
+        memcpy(row, frame->data[0] + i * frame->linesize[0], width * 3);
+        fwrite(row, 1, row_size, f);
+    }
+
+    free(row);
+    fclose(f);
+}
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2)
-    {
-        printf("usage: %s <filename>\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-    // ffmpeg part
-    AVFormatContext *pFormatCtx;
-    int vidId = -1, audId = -1;
-    double fpsrendering = 0.0;
-    AVCodecContext *vidCtx, *audCtx;
-    AVCodec *vidCodec, *audCodec;
-    AVCodecParameters *vidpar, *audpar;
-    AVFrame *vframe, *aframe;
-    AVPacket *packet;
+    const char *input_url = "rtsp://192.168.10.244:554/av0_0";
+    const char *output_url = "rtmp://192.168.10.163:1935/live/test002";
 
-    // sdl part
-    int swidth, sheight;
-    SDL_Window *screen;
-    SDL_Renderer *renderer;
-    SDL_Texture *texture;
-    SDL_Rect rect;
-    SDL_AudioDeviceID auddev;
-    SDL_AudioSpec want, have;
+    AVFormatContext *input_fmt_ctx = NULL, *output_fmt_ctx = NULL;
+    AVCodecContext *input_codec_ctx = NULL, *output_codec_ctx = NULL;
+    AVStream *video_stream = NULL;
+    AVFrame *frame = NULL;
+    AVFrame *rgb_640x640_frame = NULL;
+    const AVCodec *input_codec = NULL;
+    const AVCodec *output_codec = NULL;
 
-    SDL_Init(SDL_INIT_EVERYTHING);
-    pFormatCtx = avformat_alloc_context();
-    char bufmsg[1024];
-    if (avformat_open_input(&pFormatCtx, argv[1], NULL, NULL) < 0)
+    int video_stream_index = -1;
+    if (avformat_open_input(&input_fmt_ctx, input_url, NULL, NULL) < 0)
     {
-        sprintf(bufmsg, "Cannot open %s", argv[1]);
-        perror(bufmsg);
-        goto clean_format_context;
+        fprintf(stderr, "Could not open input stream\n");
+        return 1;
     }
-    if (avformat_find_stream_info(pFormatCtx, NULL) < 0)
+
+    if (avformat_find_stream_info(input_fmt_ctx, NULL) < 0)
     {
-        perror("Cannot find stream info. Quitting.");
-        goto clean_format_context;
+        fprintf(stderr, "Could not find stream info\n");
+        return 1;
     }
-    bool foundVideo = false, foundAudio = false;
-    for (int i = 0; i < pFormatCtx->nb_streams; i++)
+
+    // Find the first video stream
+    for (int i = 0; i < input_fmt_ctx->nb_streams; i++)
     {
-        AVCodecParameters *localparam = pFormatCtx->streams[i]->codecpar;
-        AVCodec *localcodec = avcodec_find_decoder(localparam->codec_id);
-        if (localparam->codec_type == AVMEDIA_TYPE_VIDEO && !foundVideo)
+        if (input_fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
         {
-            vidCodec = localcodec;
-            vidpar = localparam;
-            vidId = i;
-            AVRational rational = pFormatCtx->streams[i]->avg_frame_rate;
-            fpsrendering = 1.0 / ((double)rational.num / (double)(rational.den));
-            foundVideo = true;
-        }
-        else if (localparam->codec_type == AVMEDIA_TYPE_AUDIO && !foundAudio)
-        {
-            audCodec = localcodec;
-            audpar = localparam;
-            audId = i;
-            foundAudio = true;
-        }
-        if (foundVideo && foundAudio)
-        {
+            video_stream_index = i;
             break;
         }
     }
-    vidCtx = avcodec_alloc_context3(vidCodec);
-    audCtx = avcodec_alloc_context3(audCodec);
-    if (avcodec_parameters_to_context(vidCtx, vidpar) < 0)
+    if (video_stream_index < 0)
     {
-        perror("vidCtx");
-        goto clean_codec_context;
+        fprintf(stderr, "No video stream found\n");
+        return 1;
     }
-    if (avcodec_parameters_to_context(audCtx, audpar) < 0)
+    AVCodecParameters *codecpar = input_fmt_ctx->streams[video_stream_index]->codecpar;
+    input_codec = avcodec_find_decoder(codecpar->codec_id);
+    if (!input_codec)
     {
-        perror("audCtx");
-        goto clean_codec_context;
+        fprintf(stderr, "Codec not found\n");
+        return 1;
     }
-    if (avcodec_open2(vidCtx, vidCodec, NULL) < 0)
+    input_codec_ctx = avcodec_alloc_context3(input_codec);
+    if (!input_codec_ctx)
     {
-        perror("vidCtx");
-        goto clean_codec_context;
+        fprintf(stderr, "Could not allocate video codec context\n");
+        return 1;
     }
-    if (avcodec_open2(audCtx, audCodec, NULL) < 0)
+    if (avcodec_parameters_to_context(input_codec_ctx, codecpar) < 0)
     {
-        perror("audCtx");
-        goto clean_codec_context;
+        fprintf(stderr, "Could not copy codec parameters to context\n");
+        return 1;
+    }
+    if (avcodec_open2(input_codec_ctx, input_codec, NULL) < 0)
+    {
+        fprintf(stderr, "Could not open codec\n");
+        return 1;
+    }
+    if (avformat_alloc_output_context2(&output_fmt_ctx, NULL, "flv", output_url) < 0)
+    {
+        fprintf(stderr, "Could not create output context\n");
+        return 1;
+    }
+    video_stream = avformat_new_stream(output_fmt_ctx, NULL);
+    if (!video_stream)
+    {
+        fprintf(stderr, "Could not create new stream\n");
+        return 1;
+    }
+    output_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    if (!output_codec)
+    {
+        fprintf(stderr, "Encoder not found\n");
+        return 1;
     }
 
-    vframe = av_frame_alloc();
-    aframe = av_frame_alloc();
-    packet = av_packet_alloc();
-    swidth = vidpar->width;
-    sheight = vidpar->height;
-    screen = SDL_CreateWindow("Fplay", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                              swidth, sheight, SDL_WINDOW_OPENGL);
-    if (!screen)
+    output_codec_ctx = avcodec_alloc_context3(output_codec);
+    if (!output_codec_ctx)
     {
-        perror("screen");
-        goto clean_packet_frame;
+        fprintf(stderr, "Could not allocate video codec context\n");
+        return 1;
     }
-    renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_ACCELERATED);
-    if (!renderer)
-    {
-        perror("renderer");
-        goto clean_renderer;
-    }
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_IYUV,
-                                SDL_TEXTUREACCESS_STREAMING | SDL_TEXTUREACCESS_TARGET,
-                                swidth, sheight);
-    if (!texture)
-    {
-        perror("texture");
-        goto clean_texture;
-    }
-    rect.x = 0;
-    rect.y = 0;
-    rect.w = swidth;
-    rect.h = sheight;
 
-    SDL_zero(want);
-    SDL_zero(have);
-    want.samples = audpar->sample_rate;
-    want.channels = audpar->channels;
-    auddev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
-    SDL_PauseAudioDevice(auddev, 0);
-    if (!auddev)
+    output_codec_ctx->height = input_codec_ctx->height;
+    output_codec_ctx->width = input_codec_ctx->width;
+    output_codec_ctx->sample_aspect_ratio = input_codec_ctx->sample_aspect_ratio;
+    output_codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    output_codec_ctx->time_base = (AVRational){1, 25}; // Assume 25 fps for simplicity
+
+    if (output_fmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
     {
-        perror("auddev");
-        goto clean_audio_device;
+        output_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
-    SDL_Event evt;
-    uint32_t windowID = SDL_GetWindowID(screen);
-    bool running = true;
-    while (running)
+
+    if (avcodec_open2(output_codec_ctx, output_codec, NULL) < 0)
     {
-        while (av_read_frame(pFormatCtx, packet) >= 0)
+        fprintf(stderr, "Could not open encoder\n");
+        return 1;
+    }
+
+    // Copy codec parameters from codec context to output stream
+    if (avcodec_parameters_from_context(video_stream->codecpar, output_codec_ctx) < 0)
+    {
+        fprintf(stderr, "Could not copy codec parameters to output stream\n");
+        return 1;
+    }
+
+    if (avio_open(&output_fmt_ctx->pb, output_url, AVIO_FLAG_WRITE) < 0)
+    {
+        fprintf(stderr, "Could not open output file\n");
+        return 1;
+    }
+
+    // Write the stream header
+    if (avformat_write_header(output_fmt_ctx, NULL) < 0)
+    {
+        fprintf(stderr, "Error occurred while writing header\n");
+        return 1;
+    }
+    frame = av_frame_alloc();
+    if (!frame)
+    {
+        fprintf(stderr, "Could not allocate frame\n");
+        return 1;
+    }
+    rgb_640x640_frame = av_frame_alloc();
+    if (!rgb_640x640_frame)
+    {
+        fprintf(stderr, "Could not allocate frame\n");
+        return 1;
+    }
+    struct SwsContext *sws_ctx = sws_getContext(
+        input_codec_ctx->width, input_codec_ctx->height, input_codec_ctx->pix_fmt,
+        640, 640, AV_PIX_FMT_RGB24,
+        SWS_BILINEAR, NULL, NULL, NULL);
+    uint8_t *rgb_buffer = (uint8_t *)av_malloc(av_image_get_buffer_size(AV_PIX_FMT_RGB24, 640, 640, 1));
+    av_image_fill_arrays(rgb_640x640_frame->data, rgb_640x640_frame->linesize, rgb_buffer,
+                         AV_PIX_FMT_RGB24, 640, 640, 1);
+
+    AVPacket packet;
+    while (av_read_frame(input_fmt_ctx, &packet) >= 0)
+    {
+        if (packet.stream_index == video_stream_index)
         {
-            while (SDL_PollEvent(&evt))
+            if (avcodec_send_packet(input_codec_ctx, &packet) < 0)
             {
-                switch (evt.type)
+                fprintf(stderr, "Error sending packet to decoder\n");
+                av_packet_unref(&packet);
+                continue;
+            }
+            while (avcodec_receive_frame(input_codec_ctx, frame) >= 0)
+            {
+                // 压缩尺寸，以便于给YOLO8
+                // sws_scale(sws_ctx, (const uint8_t *const *)frame->data, frame->linesize, 0,
+                //           input_codec_ctx->height, rgb_640x640_frame->data, rgb_640x640_frame->linesize);
+                // save_frame_as_bmp(rgb_640x640_frame, "./rgb_640x640_frame.bmp");
+                //
+                // send_avframe_to_yolo8(0, frame);
+                // receive_result_from_yolo8(0, NULL);
+                //
+                if (avcodec_send_frame(output_codec_ctx, frame) < 0)
                 {
-                case SDL_WINDOWEVENT:
+                    fprintf(stderr, "Error sending frame to encoder\n");
+                    continue;
+                }
+
+                while (avcodec_receive_packet(output_codec_ctx, &packet) >= 0)
                 {
-                    if (evt.window.windowID == windowID)
+                    AVStream *in_stream = input_fmt_ctx->streams[packet.stream_index];
+                    AVStream *out_stream = output_fmt_ctx->streams[packet.stream_index];
+
+                    packet.pts = av_rescale_q(packet.pts, in_stream->time_base, out_stream->time_base);
+                    packet.dts = packet.pts;
+                    if (packet.pts < packet.dts)
                     {
-                        switch (evt.window.event)
-                        {
-                        case SDL_WINDOWEVENT_CLOSE:
-                        {
-                            evt.type = SDL_QUIT;
-                            running = false;
-                            SDL_PushEvent(&evt);
-                            break;
-                        }
-                        };
+                        continue;
                     }
-                    break;
+                    if (av_interleaved_write_frame(output_fmt_ctx, &packet) < 0)
+                    {
+                        fprintf(stderr, "Error writing packet to output file\n");
+                    }
+                    av_packet_unref(&packet);
                 }
-                case SDL_QUIT:
-                {
-                    running = false;
-                    break;
-                }
-                }
+                // av_frame_unref(&filtered_frame);
             }
-            if (packet->stream_index == vidId)
-            {
-                display(vidCtx, packet, vframe, &rect,
-                        texture, renderer, fpsrendering);
-            }
-            else if (packet->stream_index == audId)
-            {
-                playaudio(audCtx, packet, aframe, auddev);
-            }
-            av_packet_unref(packet);
         }
+        av_packet_unref(&packet);
     }
 
-clean_audio_device:
-    SDL_CloseAudioDevice(auddev);
-clean_texture:
-    SDL_DestroyTexture(texture);
-clean_renderer:
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(screen);
-clean_packet_frame:
-    av_packet_free(&packet);
-    av_frame_free(&vframe);
-    av_frame_free(&aframe);
-clean_codec_context:
-    avcodec_free_context(&vidCtx);
-    avcodec_free_context(&audCtx);
-clean_format_context:
-    avformat_close_input(&pFormatCtx);
-    avformat_free_context(pFormatCtx);
+    av_write_trailer(output_fmt_ctx);
+    av_frame_free(&frame);
+    av_frame_free(&rgb_640x640_frame);
+    avcodec_free_context(&input_codec_ctx);
+    avcodec_free_context(&output_codec_ctx);
+    avformat_close_input(&input_fmt_ctx);
+    if (output_fmt_ctx && !(output_fmt_ctx->oformat->flags & AVFMT_NOFILE))
+    {
+        avio_closep(&output_fmt_ctx->pb);
+    }
+    avformat_free_context(output_fmt_ctx);
 
-    SDL_Quit();
-
+    free(rgb_buffer);
     return 0;
-}
-
-void display(AVCodecContext *ctx, AVPacket *pkt, AVFrame *frame, SDL_Rect *rect,
-             SDL_Texture *texture, SDL_Renderer *renderer, double fpsrend)
-{
-    time_t start = time(NULL);
-    if (avcodec_send_packet(ctx, pkt) < 0)
-    {
-        perror("send packet");
-        return;
-    }
-    if (avcodec_receive_frame(ctx, frame) < 0)
-    {
-        perror("receive frame");
-        return;
-    }
-    int framenum = ctx->frame_number;
-    if ((framenum % 1000) == 0)
-    {
-        printf("Frame %d (size=%d pts %d dts %d key_frame %d"
-               " [ codec_picture_number %d, display_picture_number %d\n",
-               framenum, frame->pkt_size, frame->pts, frame->pkt_dts, frame->key_frame,
-               frame->coded_picture_number, frame->display_picture_number);
-    }
-    SDL_UpdateYUVTexture(texture, rect,
-                         frame->data[0], frame->linesize[0],
-                         frame->data[1], frame->linesize[1],
-                         frame->data[2], frame->linesize[2]);
-    SDL_RenderClear(renderer);
-    SDL_RenderCopy(renderer, texture, NULL, rect);
-    SDL_RenderPresent(renderer);
-    time_t end = time(NULL);
-    double diffms = difftime(end, start) / 1000.0;
-    if (diffms < fpsrend)
-    {
-        uint32_t diff = (uint32_t)((fpsrend - diffms) * 1000);
-        printf("diffms: %f, delay time %d ms.\n", diffms, diff);
-        SDL_Delay(diff);
-    }
-}
-
-void playaudio(AVCodecContext *ctx, AVPacket *pkt, AVFrame *frame,
-               SDL_AudioDeviceID auddev)
-{
-    if (avcodec_send_packet(ctx, pkt) < 0)
-    {
-        perror("send packet");
-        return;
-    }
-    if (avcodec_receive_frame(ctx, frame) < 0)
-    {
-        perror("receive frame");
-        return;
-    }
-    int size;
-    int bufsize = av_samples_get_buffer_size(&size, ctx->channels,
-                                             frame->nb_samples, frame->format, 0);
-    bool isplanar = av_sample_fmt_is_planar(frame->format) == 1;
-    for (int ch = 0; ch < ctx->channels; ch++)
-    {
-        if (!isplanar)
-        {
-            if (SDL_QueueAudio(auddev, frame->data[ch], frame->linesize[ch]) < 0)
-            {
-                perror("playaudio");
-                printf(" %s\n", SDL_GetError());
-                return;
-            }
-        }
-        else
-        {
-            if (SDL_QueueAudio(auddev, frame->data[0] + size * ch, size) < 0)
-            {
-                perror("playaudio");
-                printf(" %s\n", SDL_GetError());
-                return;
-            }
-        }
-    }
 }

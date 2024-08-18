@@ -14,7 +14,12 @@
         "initializer_list": "c",
         "type_traits": "c",
         "xutility": "c",
-        "windows.h": "c"
+        "windows.h": "c",
+        "avfilter.h": "c",
+        "buffer.h": "c",
+        "swscale.h": "c",
+        "begin_code.h": "c",
+        "close_code.h": "c"
     },
     "cSpell.words": [
         "AVERROR",
