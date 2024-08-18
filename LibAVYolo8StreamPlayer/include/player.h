@@ -15,5 +15,23 @@
 
 #define PLAYER_H
 #ifdef PLAYER_H
+typedef unsigned char TBool;
+
+enum
+{
+    TFalse = 0,
+    TTrue = 1
+};
+enum TStatus
+{
+    TPlayerStatus_STOP = 0,
+    TPlayerStatus_PLAYING,
+    TPlayerStatus_ERROR
+};
+typedef struct
+{
+    int status;
+    char name[32];
+} TPlayer;
 
 #endif
