@@ -1,4 +1,4 @@
-gcc main.c ^
+gcc ./src/main.c ^
 -I../clog-0.0.1/include ^
 -I../ffmpeg-6.1.1-full_build-shared/include ^
 -I../SDL2-2.30.1/x86_64-w64-mingw32/include ^
@@ -20,9 +20,9 @@ gcc main.c ^
 -lswresample ^
 -lswscale ^
 -lavutil ^
+-lpthread ^
 -lm ^
 -lz ^
--lm ^
 -o LibAVYolo8StreamPlayer
-
+@echo off
 echo LibAVYolo8StreamPlayer Compilation completed.

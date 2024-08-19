@@ -19,7 +19,10 @@
         "buffer.h": "c",
         "swscale.h": "c",
         "begin_code.h": "c",
-        "close_code.h": "c"
+        "close_code.h": "c",
+        "utils.h": "c",
+        "imgutils.h": "c",
+        "process.h": "c"
     },
     "cSpell.words": [
         "AVERROR",

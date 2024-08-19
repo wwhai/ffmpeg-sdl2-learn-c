@@ -18,11 +18,11 @@
 #define SDL_MAIN_HANDLED
 #endif
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
-#include <SDL2/SDL_ttf.h>
 
 void DrawBox(SDL_Renderer *renderer, TTF_Font *font, const char *text,
              int x, int y, int w, int h, int thickness)
