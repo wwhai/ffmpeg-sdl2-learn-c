@@ -18,20 +18,22 @@
 #define QUEUE_H
 
 #include <libavformat/avformat.h>
+#include <stdlib.h>
+#include <stdio.h>
 
-typedef struct QueueData
+typedef struct
 {
     AVFrame *frame;
 } QueueData;
-// Define the structure for the queue node
+
+// Forward declare the QueueNode struct
 typedef struct QueueNode
 {
     QueueData data;
     struct QueueNode *next;
 } QueueNode;
 
-// Define the structure for the queue
-typedef struct Queue
+typedef struct
 {
     QueueNode *front;
     QueueNode *rear;

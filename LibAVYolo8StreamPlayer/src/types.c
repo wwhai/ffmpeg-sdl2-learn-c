@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef TYPES
 #define TYPES
-#ifdef TYPES
 
 #define TNew(_T_, _V_) _T_ *_V_ = (_T_ *)malloc(sizeof(_T_));
 

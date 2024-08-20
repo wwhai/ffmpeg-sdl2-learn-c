@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef SDL2ENV
 #define SDL2ENV
-#ifdef SDL2ENV
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>

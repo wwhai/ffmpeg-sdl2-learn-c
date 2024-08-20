@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef LIBAVENV
 #define LIBAVENV
-#ifdef LIBAVENV
 
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
@@ -24,7 +24,6 @@
 #include <libavutil/log.h>
 #include <stdlib.h>
 #include "queue.c"
-#include "yolo8.h"
 typedef struct TLibAVEnv
 {
     AVFormatContext *inputFmtCtx;
@@ -62,6 +61,7 @@ TLibAVEnv *NewTLibAVEnv()
     Env->outputCodec = NULL;
     Env->inputVideoCodec = NULL;
     Env->inputAudioCodec = NULL;
+    return Env;
 }
 int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
 {

@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef PLAYER
 #define PLAYER
-#ifdef PLAYER
 
 #include <pthread.h>
 #include "libavenv.c"
@@ -33,17 +33,17 @@ typedef struct
     int status;
     TLibAVEnv *AvEnv;
     TLibSDL2Env *Sdl2Env;
-    Queue *Queue;
+    Queue *queue;
 } TPlayer;
 TPlayer *NewTPlayer()
 {
     TNew(TPlayer, player);
     player->Sdl2Env = NewLibSdl2Env();
     player->AvEnv = NewTLibAVEnv();
-    player->Queue = NewQueue();
+    player->queue = NewQueue();
     return player;
 }
-void LibAvThreadCallback(void *data)
+void *LibAvThreadCallback(void *data)
 {
     TPlayer *player = (TPlayer *)data;
     int ret;
@@ -53,9 +53,10 @@ void LibAvThreadCallback(void *data)
     {
         exit(1);
     }
-    LibAvStreamEnvLoop(player->AvEnv, player->Queue);
+    LibAvStreamEnvLoop(player->AvEnv, player->queue);
+    pthread_exit(NULL);
 }
-void Sdl2ThreadCallback(void *data)
+void *Sdl2ThreadCallback(void *data)
 {
     TPlayer *player = (TPlayer *)data;
     int ret;
@@ -64,14 +65,15 @@ void Sdl2ThreadCallback(void *data)
     {
         exit(1);
     }
-    TLibSDL2EnvEventLoop(player->Sdl2Env, player->Queue);
+    TLibSDL2EnvEventLoop(player->Sdl2Env, player->queue);
+    pthread_exit(NULL);
 }
 void StartTPlayer(TPlayer *player)
 {
     void *retival;
     pthread_t Sdl2Thread, LibAvThread;
-    pthread_create(&Sdl2Thread, NULL, (void *)&Sdl2ThreadCallback, (void *)player);
-    pthread_create(&LibAvThread, NULL, (void *)&LibAvThreadCallback, (void *)player);
+    pthread_create(&Sdl2Thread, NULL, &Sdl2ThreadCallback, (void *)player);
+    pthread_create(&LibAvThread, NULL, &LibAvThreadCallback, (void *)player);
     pthread_join(Sdl2Thread, &retival);
     pthread_join(LibAvThread, &retival);
 }
