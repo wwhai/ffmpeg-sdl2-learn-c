@@ -17,10 +17,10 @@
 #define PLAYER
 #ifdef PLAYER
 
+#include <pthread.h>
 #include "libavenv.c"
 #include "libsdl2env.c"
 #include "queue.c"
-#include <pthread.h>
 
 enum TStatus
 {
@@ -53,7 +53,7 @@ void LibAvThreadCallback(void *data)
     {
         exit(1);
     }
-    StartStream(player->AvEnv);
+    LibAvStreamEnvLoop(player->AvEnv, player->Queue);
 }
 void Sdl2ThreadCallback(void *data)
 {
@@ -64,7 +64,7 @@ void Sdl2ThreadCallback(void *data)
     {
         exit(1);
     }
-    TLibSDL2EnvEventLoop(player->Sdl2Env);
+    TLibSDL2EnvEventLoop(player->Sdl2Env, player->Queue);
 }
 void StartTPlayer(TPlayer *player)
 {

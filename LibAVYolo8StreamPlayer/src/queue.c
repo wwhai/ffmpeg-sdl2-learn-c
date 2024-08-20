@@ -14,12 +14,12 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#define QUEUE
-#ifdef QUEUE
+#ifndef QUEUE_H
+#define QUEUE_H
 
 #include <libavformat/avformat.h>
 
-typedef struct
+typedef struct QueueData
 {
     AVFrame *frame;
 } QueueData;
@@ -31,7 +31,7 @@ typedef struct QueueNode
 } QueueNode;
 
 // Define the structure for the queue
-typedef struct
+typedef struct Queue
 {
     QueueNode *front;
     QueueNode *rear;

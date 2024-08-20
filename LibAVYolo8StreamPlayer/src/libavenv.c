@@ -23,6 +23,8 @@
 #include <libavutil/imgutils.h>
 #include <libavutil/log.h>
 #include <stdlib.h>
+#include "queue.c"
+
 typedef struct TLibAVEnv
 {
     AVFormatContext *inputFmtCtx;
@@ -260,13 +262,13 @@ void InitSWS(TLibAVEnv *Env)
                          Env->yoloFrame->linesize,
                          rgb_buffer, AV_PIX_FMT_RGB24, 640, 640, 1);
 }
-void StartStream(TLibAVEnv *Env)
+void LibAvStreamEnvLoop(TLibAVEnv *Env, Queue *queue)
 {
     int ret = 0;
     char error_buffer[128];
     while (av_read_frame(Env->inputFmtCtx, Env->OnePacket) >= 0)
     {
-        printf("av_read_frame: %ld\n", Env->OnePacket->stream_index);
+        // printf("av_read_frame: %ld\n", Env->OnePacket->stream_index);
         if (Env->OnePacket->stream_index == Env->audioInstreamIndex)
         {
             // Audio
@@ -282,6 +284,10 @@ void StartStream(TLibAVEnv *Env)
             }
             while (avcodec_receive_frame(Env->inputVideoCodecCtx, Env->OneFrame) >= 0)
             {
+                // 解码帧,发送到Queue
+                QueueData qd;
+                qd.frame = Env->OneFrame;
+                enqueue(queue, qd);
                 if (avcodec_send_frame(Env->outputCodecCtx, Env->OneFrame) < 0)
                 {
                     av_strerror(ret, error_buffer, sizeof(error_buffer));
