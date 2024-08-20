@@ -24,7 +24,7 @@
 #include <libavutil/log.h>
 #include <stdlib.h>
 #include "queue.c"
-
+#include "yolo8.h"
 typedef struct TLibAVEnv
 {
     AVFormatContext *inputFmtCtx;

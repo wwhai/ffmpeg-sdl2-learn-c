@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, 0);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (!renderer)
     {
         fprintf(stderr, "SDL: could not create renderer - %s\n", SDL_GetError());
