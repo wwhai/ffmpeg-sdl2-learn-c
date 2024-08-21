@@ -23,6 +23,7 @@
 #include <libavutil/imgutils.h>
 #include <libavutil/log.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include "queue.c"
 typedef struct TLibAVEnv
 {
@@ -74,7 +75,7 @@ int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
         return 1;
     }
 
-    if (avformat_find_stream_info(Env->inputFmtCtx, NULL) < 0)
+    if (ret = avformat_find_stream_info(Env->inputFmtCtx, NULL) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avformat_find_stream_info: %s\n", error_buffer);
@@ -136,32 +137,32 @@ int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
         fprintf(stderr, "avcodec_alloc_context3 inputVideoCodecCtx: %s\n", error_buffer);
         return 1;
     }
-    if (avcodec_parameters_to_context(Env->inputAudioCodecCtx, audioCodecpar) < 0)
+    if (ret = avcodec_parameters_to_context(Env->inputAudioCodecCtx, audioCodecpar) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avcodec_parameters_to_context inputAudioCodecCtx: %s\n", error_buffer);
         return 1;
     }
-    if (avcodec_parameters_to_context(Env->inputVideoCodecCtx, videoCodecpar) < 0)
+    if (ret = avcodec_parameters_to_context(Env->inputVideoCodecCtx, videoCodecpar) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avcodec_parameters_to_context inputVideoCodecCtx: %s\n", error_buffer);
         return 1;
     }
-    if (avcodec_open2(Env->inputAudioCodecCtx, Env->inputAudioCodec, NULL) < 0)
+    if (ret = avcodec_open2(Env->inputAudioCodecCtx, Env->inputAudioCodec, NULL) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avcodec_open2 inputAudioCodecCtx: %s\n", error_buffer);
         return 1;
     }
-    if (avcodec_open2(Env->inputVideoCodecCtx, Env->inputVideoCodec, NULL) < 0)
+    if (ret = avcodec_open2(Env->inputVideoCodecCtx, Env->inputVideoCodec, NULL) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avcodec_open2 inputVideoCodecCtx: %s\n", error_buffer);
         return 1;
     }
 
-    if (avformat_alloc_output_context2(&Env->outputFmtCtx, NULL, "flv", outputUrl) < 0)
+    if (ret = avformat_alloc_output_context2(&Env->outputFmtCtx, NULL, "flv", outputUrl) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avformat_alloc_output_context2 outputFmtCtx: %s\n", error_buffer);
@@ -201,26 +202,26 @@ int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
         Env->outputCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
-    if (avcodec_open2(Env->outputCodecCtx, Env->outputCodec, NULL) < 0)
+    if (ret = avcodec_open2(Env->outputCodecCtx, Env->outputCodec, NULL) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avcodec_open2 outputCodecCtx: %s\n", error_buffer);
         return 1;
     }
 
-    if (avcodec_parameters_from_context(Env->outputVideoStream->codecpar, Env->outputCodecCtx) < 0)
+    if (ret = avcodec_parameters_from_context(Env->outputVideoStream->codecpar, Env->outputCodecCtx) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avcodec_parameters_from_context outputVideoStream: %s\n", error_buffer);
         return 1;
     }
-    if (avio_open(&Env->outputFmtCtx->pb, outputUrl, AVIO_FLAG_WRITE) < 0)
+    if (ret = avio_open(&Env->outputFmtCtx->pb, outputUrl, AVIO_FLAG_WRITE) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avio_open outputFmtCtx outputUrl: %s\n", error_buffer);
         return 1;
     }
-    if (avformat_write_header(Env->outputFmtCtx, NULL) < 0)
+    if (ret = avformat_write_header(Env->outputFmtCtx, NULL) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
         fprintf(stderr, "avformat_write_header outputFmtCtx: %s\n", error_buffer);
@@ -264,6 +265,9 @@ void InitSWS(TLibAVEnv *Env)
 }
 void LibAvStreamEnvLoop(TLibAVEnv *Env, Queue *queue)
 {
+
+    pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
     int ret = 0;
     char error_buffer[128];
     while (av_read_frame(Env->inputFmtCtx, Env->OnePacket) >= 0)
@@ -287,7 +291,9 @@ void LibAvStreamEnvLoop(TLibAVEnv *Env, Queue *queue)
                 // 解码帧,发送到Queue
                 QueueData qd;
                 qd.frame = Env->OneFrame;
+                pthread_mutex_lock(&lock);
                 enqueue(queue, qd);
+                pthread_mutex_unlock(&lock);
                 if (avcodec_send_frame(Env->outputCodecCtx, Env->OneFrame) < 0)
                 {
                     av_strerror(ret, error_buffer, sizeof(error_buffer));

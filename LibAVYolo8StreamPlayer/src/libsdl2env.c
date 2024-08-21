@@ -22,6 +22,7 @@
 #include <libavformat/avformat.h>
 #include "types.c"
 #include "queue.c"
+#include <pthread.h>
 
 typedef struct TLibSDL2Env
 {
@@ -147,19 +148,25 @@ void TLibSDL2EnvEventLoop(TLibSDL2Env *Env, Queue *queue)
     SDL_Event e;
     int running = 1;
     int mouse_x = 0, mouse_y = 0;
+    pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
     QueueData oqd;
     while (running)
     {
 
+        //------------------------------------------------------------------------------------------
         SDL_RenderClear(Env->mainRenderer);
         SDL_SetRenderDrawColor(Env->mainRenderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-
         if (!isQueueEmpty(queue))
         {
-            QueueData nqd = dequeue(queue);
-            if (nqd.frame != NULL)
+            for (size_t i = 0; i < queueSize(queue); i++)
             {
-                oqd.frame = nqd.frame;
+                pthread_mutex_lock(&lock);
+                QueueData nqd = dequeue(queue);
+                pthread_mutex_unlock(&lock);
+                if (nqd.frame != NULL)
+                {
+                    oqd.frame = nqd.frame;
+                }
             }
         }
         if (oqd.frame == NULL)
@@ -170,10 +177,10 @@ void TLibSDL2EnvEventLoop(TLibSDL2Env *Env, Queue *queue)
         {
             TLibSDL2EnvDisplayFrame(Env, oqd.frame);
         }
-
         SDLDrawText(Env->mainRenderer, Env->mainFont, "Hello!", mouse_x, mouse_y);
         SDLDrawRect(Env->mainRenderer, mouse_x, mouse_y, 150, 100);
         SDL_RenderPresent(Env->mainRenderer);
+        //------------------------------------------------------------------------------------------
 
         while (SDL_PollEvent(&e))
         {
@@ -185,7 +192,7 @@ void TLibSDL2EnvEventLoop(TLibSDL2Env *Env, Queue *queue)
             {
                 mouse_x = e.motion.x;
                 mouse_y = e.motion.y;
-                printf("SDL_MOUSEMOTION: %d,%d\n", mouse_x, mouse_y);
+                // printf("SDL_MOUSEMOTION: %d,%d\n", mouse_x, mouse_y);
             }
             else if (e.type == SDL_KEYDOWN)
             {
