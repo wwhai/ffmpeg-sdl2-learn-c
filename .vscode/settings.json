@@ -22,7 +22,11 @@
         "close_code.h": "c",
         "utils.h": "c",
         "imgutils.h": "c",
-        "process.h": "c"
+        "process.h": "c",
+        "bit": "c",
+        "compare": "c",
+        "cstddef": "c",
+        "limits": "c"
     },
     "cSpell.words": [
         "AVERROR",

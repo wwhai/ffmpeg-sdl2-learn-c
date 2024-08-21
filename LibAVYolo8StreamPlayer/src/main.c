@@ -25,19 +25,23 @@
 #include <signal.h>
 #include "player.c"
 
-// 信号处理函数
+TPlayer *p;
 void signalHandler(int signal)
 {
        if (signal == SIGINT)
        {
               printf("Ctrl-C received, stopping the program.\n");
+              if (p)
+              {
+                     StopTPlayer(p);
+              }
               exit(0);
        }
 }
 int main()
 {
        signal(SIGINT, signalHandler);
-       TPlayer *p = NewTPlayer();
+       p = NewTPlayer();
        StartTPlayer(p);
        while (1)
        {

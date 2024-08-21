@@ -161,7 +161,6 @@ int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
         fprintf(stderr, "avcodec_open2 inputVideoCodecCtx: %s\n", error_buffer);
         return 1;
     }
-
     if (ret = avformat_alloc_output_context2(&Env->outputFmtCtx, NULL, "flv", outputUrl) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
@@ -175,6 +174,7 @@ int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
         fprintf(stderr, "avformat_new_stream outputFmtCtx: %s\n", error_buffer);
         return 1;
     }
+
     Env->outputCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (!Env->outputCodec)
     {
@@ -194,7 +194,7 @@ int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
     Env->outputCodecCtx->height = Env->inputVideoCodecCtx->height;
     Env->outputCodecCtx->width = Env->inputVideoCodecCtx->width;
     Env->outputCodecCtx->sample_aspect_ratio = Env->inputVideoCodecCtx->sample_aspect_ratio;
-    Env->outputCodecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
+    Env->outputCodecCtx->pix_fmt = AV_PIX_FMT_YUVJ420P;
     Env->outputCodecCtx->time_base = (AVRational){1, 25};
 
     if (Env->outputFmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
@@ -289,9 +289,9 @@ void LibAvStreamEnvLoop(TLibAVEnv *Env, Queue *queue)
             while (avcodec_receive_frame(Env->inputVideoCodecCtx, Env->OneFrame) >= 0)
             {
                 // 解码帧,发送到Queue
+                pthread_mutex_lock(&lock);
                 QueueData qd;
                 qd.frame = Env->OneFrame;
-                pthread_mutex_lock(&lock);
                 enqueue(queue, qd);
                 pthread_mutex_unlock(&lock);
                 if (avcodec_send_frame(Env->outputCodecCtx, Env->OneFrame) < 0)

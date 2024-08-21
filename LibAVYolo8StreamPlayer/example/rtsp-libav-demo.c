@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
     output_codec_ctx->height = input_codec_ctx->height;
     output_codec_ctx->width = input_codec_ctx->width;
     output_codec_ctx->sample_aspect_ratio = input_codec_ctx->sample_aspect_ratio;
-    output_codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    output_codec_ctx->pix_fmt = AV_PIX_FMT_YUVJ420P;
     output_codec_ctx->time_base = (AVRational){1, 25}; // Assume 25 fps for simplicity
 
     if (output_fmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
