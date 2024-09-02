@@ -14,43 +14,29 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 #ifdef _WIN32
 #define SDL_MAIN_HANDLED
-#include <windows.h>
-#else
-#include <unistd.h>
 #endif
-
 #include <stdio.h>
-#include <signal.h>
 #include "player.c"
 
-TPlayer *p;
-void signalHandler(int signal)
-{
-       if (signal == SIGINT)
-       {
-              printf("Ctrl-C received, stopping the program.\n");
-              if (p)
-              {
-                     StopTPlayer(p);
-              }
-              exit(0);
-       }
-}
 int main()
 {
-       signal(SIGINT, signalHandler);
-       p = NewTPlayer();
+       TPlayer *p = NewTPlayer();
+       TPlayerInit(p);
        StartTPlayer(p);
        while (1)
        {
-#ifdef _WIN32
-              Sleep(50);
-#else
-              sleep(0.05);
-#endif
+              printf("Enter a character ('q' to quit): ");
+              char inputChar = getchar();
+              if (inputChar == 'q' || inputChar == 'Q')
+              {
+                     printf("Exiting.\n");
+                     goto END;
+              }
        }
+END:
        StopTPlayer(p);
        return 0;
 }

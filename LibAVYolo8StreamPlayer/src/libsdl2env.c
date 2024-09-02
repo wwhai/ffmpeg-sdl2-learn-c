@@ -137,6 +137,7 @@ TLibSDL2Env *NewLibSdl2Env()
         SDL_Quit();
         return NULL;
     }
+
     TNew(TLibSDL2Env, Sdl2Env);
     return Sdl2Env;
 }
@@ -174,6 +175,19 @@ int InitTLibSDL2Env(TLibSDL2Env *Env, int w, int h)
     }
     return 0;
 }
+// 全局变量，用于音频回调
+static uint8_t *audio_buffer = NULL;
+static size_t audio_buffer_size = 0;
+static size_t audio_buffer_index = 0;
+
+// 音频回调函数
+void audio_callback(void *userdata, Uint8 *stream, int len)
+{
+    SDL_memset(stream, 0, len); // 清空stream
+    len = len > audio_buffer_size - audio_buffer_index ? audio_buffer_size - audio_buffer_index : len;
+    SDL_MixAudio(stream, audio_buffer + audio_buffer_index, len, SDL_MIX_MAXVOLUME);
+    audio_buffer_index += len;
+}
 void TLibSDL2EnvEventLoop(TLibSDL2Env *Env, Queue *queue)
 {
     SDL_Event e;
@@ -181,6 +195,17 @@ void TLibSDL2EnvEventLoop(TLibSDL2Env *Env, Queue *queue)
     int mouse_x = 0, mouse_y = 0;
     pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
     QueueData oqd;
+    SDL_AudioSpec desired_spec;
+    SDL_zero(desired_spec);
+    desired_spec.freq = Env->inputAudioCodec->sample_rate;
+    desired_spec.format = AUDIO_S16SYS;
+    desired_spec.channels = Env->inputAudioCodecCtx->channels;
+    desired_spec.samples = 1024;
+    desired_spec.callback = audio_callback;
+    // 分配音频缓冲区
+    audio_buffer_size = 1024 * 2 * codec_ctx->channels; // 每个样本16位，所以乘以2
+    audio_buffer = (uint8_t *)av_malloc(audio_buffer_size);
+
     while (running)
     {
 

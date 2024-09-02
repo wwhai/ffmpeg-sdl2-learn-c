@@ -22,8 +22,10 @@
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/log.h>
+
 #include <stdlib.h>
 #include <pthread.h>
+
 #include "queue.c"
 typedef struct TLibAVEnv
 {
@@ -44,6 +46,8 @@ typedef struct TLibAVEnv
     struct SwsContext *swsCtx;
 
 } TLibAVEnv;
+void TLibAVEnvRunYoloV8Model(TLibAVEnv *Env);
+
 TLibAVEnv *NewTLibAVEnv()
 {
     av_log_set_level(AV_LOG_ERROR);
@@ -51,20 +55,53 @@ TLibAVEnv *NewTLibAVEnv()
     Env->videoInstreamIndex = -1;
     Env->audioInstreamIndex = -1;
     Env->inputFmtCtx = NULL;
-    Env->outputFmtCtx = NULL;
-    Env->inputAudioCodecCtx = NULL;
-    Env->inputVideoCodecCtx = NULL;
-    Env->outputCodecCtx = NULL;
-    Env->outputVideoStream = NULL;
-    Env->OnePacket = NULL;
-    Env->OneFrame = NULL;
-    Env->yoloFrame = NULL;
-    Env->outputCodec = NULL;
     Env->inputVideoCodec = NULL;
     Env->inputAudioCodec = NULL;
+    Env->inputAudioCodecCtx = NULL;
+    Env->inputVideoCodecCtx = NULL;
+    Env->outputFmtCtx = NULL;
+    Env->outputCodec = NULL;
+    Env->outputCodecCtx = NULL;
+    Env->outputVideoStream = NULL;
     return Env;
 }
-int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
+/// @brief 初始化各种帧
+/// @param Env
+/// @return
+int TLibAVEnvInitAvFrame(TLibAVEnv *Env)
+{
+    int ret;
+    char error_buffer[128];
+    Env->OneFrame = av_frame_alloc();
+    if (!Env->OneFrame)
+    {
+        av_strerror(ret, error_buffer, sizeof(error_buffer));
+        fprintf(stderr, "av_frame_alloc OneFrame: %s\n", error_buffer);
+        return 1;
+    }
+    Env->yoloFrame = av_frame_alloc();
+    if (!Env->yoloFrame)
+    {
+        av_strerror(ret, error_buffer, sizeof(error_buffer));
+        fprintf(stderr, "av_frame_alloc yoloFrame: %s\n", error_buffer);
+        return 1;
+    }
+    Env->OnePacket = av_packet_alloc();
+    if (!Env->OnePacket)
+    {
+        av_strerror(ret, error_buffer, sizeof(error_buffer));
+        fprintf(stderr, "av_packet_alloc OnePacket: %s\n", error_buffer);
+        return 1;
+    }
+    return 0;
+}
+
+/// @brief 初始化输入解码器
+/// @param Env
+/// @param inputUrl
+/// @param outputUrl
+/// @return
+int TLibAVEnvInitInputCodec(TLibAVEnv *Env, const char *inputUrl)
 {
     int ret;
     char error_buffer[128];
@@ -161,6 +198,17 @@ int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
         fprintf(stderr, "avcodec_open2 inputVideoCodecCtx: %s\n", error_buffer);
         return 1;
     }
+
+    return 0;
+}
+/// @brief 推流
+/// @param Env
+/// @param outputUrl
+/// @return
+int TLibAVEnvInitOutputCodec(TLibAVEnv *Env, const char *outputUrl)
+{
+    int ret;
+    char error_buffer[128];
     if (ret = avformat_alloc_output_context2(&Env->outputFmtCtx, NULL, "flv", outputUrl) < 0)
     {
         av_strerror(ret, error_buffer, sizeof(error_buffer));
@@ -227,55 +275,41 @@ int OpenStream(TLibAVEnv *Env, const char *inputUrl, const char *outputUrl)
         fprintf(stderr, "avformat_write_header outputFmtCtx: %s\n", error_buffer);
         return 1;
     }
-    Env->OneFrame = av_frame_alloc();
-    if (!Env->OneFrame)
-    {
-        av_strerror(ret, error_buffer, sizeof(error_buffer));
-        fprintf(stderr, "av_frame_alloc OneFrame: %s\n", error_buffer);
-        return 1;
-    }
-    Env->yoloFrame = av_frame_alloc();
-    if (!Env->yoloFrame)
-    {
-        av_strerror(ret, error_buffer, sizeof(error_buffer));
-        fprintf(stderr, "av_frame_alloc yoloFrame: %s\n", error_buffer);
-        return 1;
-    }
-    Env->OnePacket = av_packet_alloc();
-    if (!Env->OnePacket)
-    {
-        av_strerror(ret, error_buffer, sizeof(error_buffer));
-        fprintf(stderr, "av_packet_alloc OnePacket: %s\n", error_buffer);
-        return 1;
-    }
-    return 0;
+    return 1;
 }
-void InitSWS(TLibAVEnv *Env)
+/// @brief 尺寸变换
+/// @param Env
+/// @return
+int TLibAVEnvInitSWS(TLibAVEnv *Env)
 {
-    struct SwsContext *sws_ctx = sws_getContext(
-        Env->inputAudioCodecCtx->width,
-        Env->inputAudioCodecCtx->height,
-        Env->inputAudioCodecCtx->pix_fmt,
+    Env->swsCtx = sws_getContext(
+        Env->inputVideoCodecCtx->width,
+        Env->inputVideoCodecCtx->height,
+        Env->inputVideoCodecCtx->pix_fmt,
         640, 640, AV_PIX_FMT_RGB24,
         SWS_BILINEAR, NULL, NULL, NULL);
+
     uint8_t *rgb_buffer = (uint8_t *)av_malloc(av_image_get_buffer_size(AV_PIX_FMT_RGB24, 640, 640, 1));
-    av_image_fill_arrays(Env->yoloFrame->data,
-                         Env->yoloFrame->linesize,
+    av_image_fill_arrays(Env->yoloFrame->data, Env->yoloFrame->linesize,
                          rgb_buffer, AV_PIX_FMT_RGB24, 640, 640, 1);
+    return 1;
 }
-void LibAvStreamEnvLoop(TLibAVEnv *Env, Queue *queue)
+
+/// @brief 显示帧
+/// @param Env
+/// @param queue
+void TLibAVEnvReceiveDisplay(TLibAVEnv *Env, Queue *queue)
 {
 
     pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-
     int ret = 0;
     char error_buffer[128];
+
     while (av_read_frame(Env->inputFmtCtx, Env->OnePacket) >= 0)
     {
-        // printf("av_read_frame: %ld\n", Env->OnePacket->stream_index);
+        // printf("av_read_frame: %d\n", Env->OnePacket->size);
         if (Env->OnePacket->stream_index == Env->audioInstreamIndex)
         {
-            // Audio
             continue;
         }
         if (Env->OnePacket->stream_index == Env->videoInstreamIndex)
@@ -288,40 +322,15 @@ void LibAvStreamEnvLoop(TLibAVEnv *Env, Queue *queue)
             }
             while (avcodec_receive_frame(Env->inputVideoCodecCtx, Env->OneFrame) >= 0)
             {
-                // 解码帧,发送到Queue
-                pthread_mutex_lock(&lock);
-                QueueData qd;
-                qd.frame = Env->OneFrame;
-                enqueue(queue, qd);
-                pthread_mutex_unlock(&lock);
-                if (avcodec_send_frame(Env->outputCodecCtx, Env->OneFrame) < 0)
-                {
-                    av_strerror(ret, error_buffer, sizeof(error_buffer));
-                    fprintf(stderr, "avcodec_send_frame OneFrame: %s\n", error_buffer);
-                    continue;
-                }
-                while (avcodec_receive_packet(Env->outputCodecCtx, Env->OnePacket) >= 0)
-                {
-                    AVStream *in_stream = Env->inputFmtCtx->streams[Env->OnePacket->stream_index];
-                    AVStream *out_stream = Env->outputFmtCtx->streams[Env->OnePacket->stream_index];
-
-                    Env->OnePacket->pts = av_rescale_q(Env->OnePacket->pts, in_stream->time_base, out_stream->time_base);
-                    Env->OnePacket->dts = Env->OnePacket->pts;
-                    if (Env->OnePacket->pts < Env->OnePacket->dts)
-                    {
-                        continue;
-                    }
-                    if (av_interleaved_write_frame(Env->outputFmtCtx, Env->OnePacket) < 0)
-                    {
-                        fprintf(stderr, "Error writing packet to output file\n");
-                    }
-                    av_packet_unref(Env->OnePacket);
-                }
+                // TLibAVEnvRunYoloV8Model(Env);
             }
         }
         av_packet_unref(Env->OnePacket);
     }
 }
+
+/// @brief s释放资源
+/// @param Env
 void DestroyTLibAVEnv(TLibAVEnv *Env)
 {
     av_frame_free(&Env->OneFrame);
@@ -337,5 +346,4 @@ void DestroyTLibAVEnv(TLibAVEnv *Env)
     }
     avformat_free_context(Env->outputFmtCtx);
 }
-
 #endif
