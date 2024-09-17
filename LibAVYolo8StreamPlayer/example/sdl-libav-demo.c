@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "SDL: could not create texture - %s\n", SDL_GetError());
         return -1;
     }
-    TTF_Font *font = TTF_OpenFont("Ubuntu-Title.ttf", 24);
+    TTF_Font *font = TTF_OpenFont("font.ttf", 24);
     if (font == NULL)
     {
         printf("TTF_OpenFont Error: %s\n", TTF_GetError());
@@ -211,35 +211,39 @@ int main(int argc, char *argv[])
                 SDL_Rect srcRect = {0, 0, 1920, 1080};
                 SDL_Rect distRect1 = {0, 0, 1920 / 2, 1080 / 2};
                 SDL_Rect distRect2 = {1920 / 2, 0, 1920 / 2, 1080 / 2};
+                SDL_Rect distRect3 = {0, 1080 / 2, 1920 / 2, 1080 / 2};
+                SDL_Rect distRect4 = {1920 / 2, 1080 / 2, 1920 / 2, 1080 / 2};
 
                 SDL_RenderCopy(renderer, texture, &srcRect, &distRect1);
                 SDL_RenderCopy(renderer, texture, &srcRect, &distRect2);
+                SDL_RenderCopy(renderer, texture, &srcRect, &distRect3);
+                SDL_RenderCopy(renderer, texture, &srcRect, &distRect4);
 
                 DrawBox(renderer, font, "CLASS:A", mouse_x - 10, mouse_y - 10, 100, 100, 5);
                 SDL_RenderPresent(renderer);
             }
             av_packet_unref(&packet);
             // SDL EVENT
-            // while (SDL_PollEvent(&e))
-            // {
-            //     if (e.type == SDL_QUIT)
-            //     {
-            //         running = 0;
-            //     }
-            //     else if (e.type == SDL_MOUSEMOTION)
-            //     {
-            //         mouse_x = e.motion.x;
-            //         mouse_y = e.motion.y;
-            //     }
-            //     else if (e.type == SDL_KEYDOWN)
-            //     {
-            //         if (e.key.keysym.sym == SDLK_ESCAPE)
-            //         {
-            //             running = 0;
-            //         }
-            //     }
-            // }
-            // SDL_Delay(10);
+            while (SDL_PollEvent(&e))
+            {
+                if (e.type == SDL_QUIT)
+                {
+                    running = 0;
+                }
+                else if (e.type == SDL_MOUSEMOTION)
+                {
+                    mouse_x = e.motion.x;
+                    mouse_y = e.motion.y;
+                }
+                else if (e.type == SDL_KEYDOWN)
+                {
+                    if (e.key.keysym.sym == SDLK_ESCAPE)
+                    {
+                        running = 0;
+                    }
+                }
+            }
+            SDL_Delay(10);
         }
     }
 

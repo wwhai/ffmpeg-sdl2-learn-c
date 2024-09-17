@@ -1,4 +1,4 @@
-gcc ./rtsp-libav-demo.c ^
+gcc ./sdl-libav-demo.c ^
 -I../../clog-0.0.1/include ^
 -I../../ffmpeg-6.1.1-full_build-shared/include ^
 -I../../SDL2-2.30.1/x86_64-w64-mingw32/include ^
@@ -23,6 +23,6 @@ gcc ./rtsp-libav-demo.c ^
 -lpthread ^
 -lm ^
 -lz ^
--o rtsp-libav-demo
+-o sdl-libav-demo
 @echo off
-echo rtsp-libav-demo Compilation completed.
+echo sdl-libav-demo Compilation completed.
